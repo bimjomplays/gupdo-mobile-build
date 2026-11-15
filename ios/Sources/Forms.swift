@@ -84,7 +84,8 @@ struct ReminderEditor: View {
     let original: Reminder?
 
     @State private var title = ""
-    @State private var when = Date()
+    /// The chosen time; until he picks one, the default (an hour from now) or the reminder's own time.
+    @State private var picked: Date?
     @State private var repeatChoice = RepeatChoice.never
     @State private var days: Set<Int> = []
     @State private var alarm = true
@@ -110,14 +111,16 @@ struct ReminderEditor: View {
                     HStack(spacing: 8) {
                         ForEach(Defaults.quickTimes(now: model.now, settings: model.data.settings, calendar: model.calendar),
                                 id: \.self) { q in
-                            Button(q.label) { when = q.date }
+                            let on = abs(when.timeIntervalSince(q.date)) < 30
+                            Button(q.label) { picked = q.date }
                                 .buttonStyle(.bordered)
-                                .tint(abs(when.timeIntervalSince(q.date)) < 30 ? .accentColor : .secondary)
+                                .tint(on ? .accentColor : .primary)
+                                .fontWeight(on ? .semibold : .regular)
                         }
                     }
                     .buttonBorderShape(.capsule)
                     .controlSize(.small)
-                    DatePicker("Time", selection: $when, displayedComponents: [.date, .hourAndMinute])
+                    DatePicker("Time", selection: Binding(get: { when }, set: { picked = $0 }), displayedComponents: [.date, .hourAndMinute])
                 }
             }
             Section {
@@ -155,6 +158,10 @@ struct ReminderEditor: View {
         .onAppear(perform: load)
     }
 
+    private var when: Date {
+        picked ?? original.map { $0.due ?? $0.occurrence } ?? Defaults.reminderTime(now: model.now, calendar: model.calendar)
+    }
+
     private var draftRule: RepeatRule { repeatChoice.rule(days: days) }
     private var valid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty && !(repeatChoice == .days && days.isEmpty)
@@ -164,12 +171,10 @@ struct ReminderEditor: View {
         guard !loaded else { return }
         loaded = true
         guard let r = original else {
-            when = Defaults.reminderTime(now: model.now, calendar: model.calendar)
             typing = true
             return
         }
         title = r.title
-        when = r.due ?? r.occurrence
         repeatChoice = RepeatChoice(r.repeatRule)
         if case .days(let set) = r.repeatRule { days = set }
         alarm = r.alarmIfIgnored
@@ -479,7 +484,7 @@ struct EventEditor: View {
                     ForEach(AlertChoice.allCases.filter { $0 != .leave || event.placeID != nil }) { Text($0.rawValue).tag($0) }
                 }
             } footer: {
-                Text("\(mainAlertText). Then an alarm every \(model.data.settings.alarmEveryMinutes) min until you answer.")
+                Text("An alarm at \(mainAlertText), again every \(model.data.settings.alarmEveryMinutes) min until you answer Got it.")
             }
             if let original {
                 Section {
@@ -525,7 +530,7 @@ struct EventEditor: View {
     private var mainAlertText: String {
         let d = draft
         let date = EventLogic.mainAlertDate(d, settings: model.data.settings)
-        return "\(Planner.mainAlertText(d)) at \(Formats.time(date, calendar: model.calendar))"
+        return "\(Formats.time(date, calendar: model.calendar)) (“\(Planner.mainAlertText(d))”)"
     }
 
     private func load() {

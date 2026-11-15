@@ -159,8 +159,8 @@ struct NowCardView: View {
             return habits.count > 1 ? habits.map(\.name).joined(separator: " · ") + "\n" + window : window
         case .event:
             guard let e = model.event(card.itemIDs[0]) else { return nil }
-            let mainAlert = Planner.mainAlertText(e)
-            return "\(mainAlert) · starts \(Formats.when(e.start, now: model.now, calendar: model.calendar))"
+            if card.ringing { return "\(Planner.mainAlertText(e)) · starts \(Formats.time(e.start, calendar: model.calendar))" }
+            return e.end.map { "Until \(Formats.time($0, calendar: model.calendar))" }
         }
     }
 }
@@ -199,7 +199,7 @@ struct AnswerButtons: View {
         case .habit:
             HStack(spacing: 10) {
                 Button { model.screen = .proof(ids) } label: {
-                    Label("Done + proof", systemImage: "checkmark.seal").frame(maxWidth: .infinity)
+                    Label("Prove it", systemImage: "checkmark.seal").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
                 Button { model.screen = .answers(.habit, ids) } label: {

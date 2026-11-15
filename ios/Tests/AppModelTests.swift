@@ -153,6 +153,16 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(hreq.content.categoryIdentifier, "headsUp")
     }
 
+    func testWithoutAlarmPermissionAlarmsComeAsTimeSensitiveNotifications() {
+        let (d, _) = ringingReminder()
+        let plan = Planner.plan(d, now: now, calendar: cal)
+        XCTAssertEqual(NotificationFactory.notifications(plan, alarmsAllowed: true, limit: 60).count, 0)
+        let fallback = NotificationFactory.notifications(plan, alarmsAllowed: false, limit: 60)
+        XCTAssertEqual(fallback.count, 11)
+        XCTAssertTrue(fallback.allSatisfy { $0.kind == .timeSensitive })
+        XCTAssertEqual(NotificationFactory.notifications(plan, alarmsAllowed: false, limit: 5).count, 5)
+    }
+
     func testAlarmConfigurationAndIntents() {
         let (d, _) = ringingReminder()
         let alarm = Planner.plan(d, now: now, calendar: cal).alarms[0]

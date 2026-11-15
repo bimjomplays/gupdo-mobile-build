@@ -25,16 +25,18 @@ struct AlertScheduler: AlertScheduling {
     }
 
     func apply(_ plan: Plan, settings: Settings, calendar: Calendar) async {
+        let manager = AlarmManager.shared
+        let alarmsAllowed = manager.authorizationState == .authorized
+
         // Notifications: replace everything pending (at most 60, the planner keeps the earliest).
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
-        for alert in plan.notifications {
+        for alert in NotificationFactory.notifications(plan, alarmsAllowed: alarmsAllowed, limit: settings.maxNotifications) {
             try? await center.add(NotificationFactory.request(for: alert, settings: settings, calendar: calendar))
         }
 
         // Alarms: keep the ones that stay, cancel the rest, add the new ones (the same alert keeps the same id).
-        let manager = AlarmManager.shared
-        guard manager.authorizationState == .authorized else { return }
+        guard alarmsAllowed else { return }
         let existing = ((try? manager.alarms) ?? []).map(\.id)
         let sync = AlarmSync.diff(plan: plan, existing: existing)
         for id in sync.cancel {
@@ -76,6 +78,18 @@ enum NotificationFactory {
             }
             return UNNotificationCategory(identifier: id, actions: actions, intentIdentifiers: [], options: [])
         })
+    }
+
+    /// The notifications to schedule. Without AlarmKit permission the alarms come as Time Sensitive notifications
+    /// instead (they don't ring on silent, but the item still keeps coming back until answered).
+    static func notifications(_ plan: Plan, alarmsAllowed: Bool, limit: Int) -> [PlannedAlert] {
+        guard !alarmsAllowed else { return plan.notifications }
+        let all = plan.alerts.map { a -> PlannedAlert in
+            var a = a
+            if a.kind == .alarm { a.kind = .timeSensitive }
+            return a
+        }
+        return Array(all.sorted { ($0.fireDate, $0.id) < ($1.fireDate, $1.id) }.prefix(limit))
     }
 
     static func request(for alert: PlannedAlert, settings: Settings, calendar: Calendar) -> UNNotificationRequest {
