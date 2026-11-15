@@ -1,0 +1,9 @@
+ios/*.xcodeproj
+ios/Sources/Info.plist
+ios/GupDo.entitlements
+ios/build/
+ios/*.log
+ios/Payload/
+*.ipa
+*.xcresult
+GupDoKit/.build/
