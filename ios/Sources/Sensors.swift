@@ -44,6 +44,8 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
     private var monitorTask: Task<CLMonitor, Never>?
     private var eventsTask: Task<Void, Never>?
     private var onRegion: (@MainActor (UUID, Bool, Date) -> Void)?
+    /// The places last asked for, watched as soon as location permission comes (see `watch`).
+    private var wanted: [Place] = []
     private var drivingTask: Task<Void, Never>?
     private var background: CLBackgroundActivitySession?
     private(set) var lastFix: LocationFix?
@@ -70,11 +72,23 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         // Arrivals in the background need Always: ask for the upgrade once While Using is granted.
         if manager.authorizationStatus == .authorizedWhenInUse { manager.requestAlwaysAuthorization() }
+        // permission just came: start watching the places that were waiting for it
+        Task { @MainActor in
+            guard self.locationAllowed, self.monitorTask == nil, let onRegion = self.onRegion else { return }
+            await self.watch(self.wanted, onRegion: onRegion)
+        }
+    }
+
+    /// Location allowed (While Using or Always): region monitoring can start.
+    private var locationAllowed: Bool {
+        [.authorizedWhenInUse, .authorizedAlways].contains(manager.authorizationStatus)
     }
 
     // MARK: Places
 
-    static let monitorName = "gupdo-places"
+    /// CLMonitor's name. Letters and digits only: CoreLocation asserts (and the app dies) on any other character
+    /// ("Monitor name is not valid"), which is what took build 16 down at launch with "gupdo-places".
+    static let monitorName = "gupdoPlaces"
 
     /// A condition's identifier carries the place and its circle, so a moved place is a new condition.
     static func identifier(_ p: Place) -> String {
@@ -86,9 +100,14 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
     }
 
     /// `places` is already picked (GupDoKit's PlaceWatch: what's needed first, at most 19).
+    /// Nothing is monitored before location is allowed: the monitor is opened once permission comes
+    /// (`locationManagerDidChangeAuthorization`), and from then on at every launch, so the events of a background
+    /// relaunch arrive.
     func watch(_ places: [Place], onRegion: @escaping @MainActor (UUID, Bool, Date) -> Void) async {
         self.onRegion = onRegion
-        guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { return }
+        wanted = places
+        guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self), locationAllowed else { return }
+        // made once per run: CoreLocation asserts on a second open monitor with the same name
         if monitorTask == nil {
             monitorTask = Task { @MainActor in await CLMonitor(Self.monitorName) }
             let made = monitorTask!
@@ -108,11 +127,11 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
         }
         guard let monitor = await monitorTask?.value else { return }
         // At most 20 conditions per app
-        let wanted = places.prefix(20)
-        let ids = Set(wanted.map(Self.identifier))
+        let picked = places.prefix(20)
+        let ids = Set(picked.map(Self.identifier))
         for old in await monitor.identifiers where !ids.contains(old) { await monitor.remove(old) }
         let existing = Set(await monitor.identifiers)
-        for p in wanted where !existing.contains(Self.identifier(p)) {
+        for p in picked where !existing.contains(Self.identifier(p)) {
             let condition = CLMonitor.CircularGeographicCondition(
                 center: CLLocationCoordinate2D(latitude: p.latitude, longitude: p.longitude), radius: p.radius)
             await monitor.add(condition, identifier: Self.identifier(p), assuming: .unsatisfied)

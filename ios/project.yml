@@ -12,7 +12,7 @@ settings:
   base:
     # Swift 5 language mode, the same as GupDoKit's Package.swift (the app compiles its files)
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "0.1.1"
     # CI passes the run number as the build number (TestFlight wants it to grow)
     CURRENT_PROJECT_VERSION: "1"
 targets:

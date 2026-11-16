@@ -98,6 +98,7 @@ jobs:
           nohup xcrun simctl boot "$udid" > "$RUNNER_TEMP/boot.log" 2>&1 &
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       - name: Build for testing
+        id: build
         run: |
           set -o pipefail
           start=$SECONDS
@@ -143,6 +144,21 @@ jobs:
             CODE_SIGNING_ALLOWED=NO test-without-building > ui.log 2>&1 \
             || { grep -E "error:|failed|XCTAssert" ui.log | head -80; tail -60 ui.log; exit 1; }
           echo "UI tests in $((SECONDS - start)) s"
+      - name: Launch check (opened like on a phone, fresh and with sample data)
+        # the tests host the app with AppDelegate.underTest set, which skips the real launch path; this opens the app
+        # normally (simctl launch) and fails if it dies within 20 s (ci/launch-check.sh). After the tests, so its
+        # install and data never meet theirs.
+        id: launch
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          set -o pipefail
+          swiftc -swift-version 5 ../GupDoKit/Sources/GupDoKit/*.swift ci/sample-data/main.swift \
+            -o "$RUNNER_TEMP/sample-data"
+          "$RUNNER_TEMP/sample-data" "$RUNNER_TEMP/gupdo-sample.json"
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b > /dev/null
+          bash ci/launch-check.sh "${{ steps.sim.outputs.udid }}" "build/Build/Products/Debug-iphonesimulator/$SCHEME.app" \
+            "$BUNDLE_ID" "$RUNNER_TEMP/gupdo-sample.json" "$GITHUB_WORKSPACE/shots/launch" | tee "$RUNNER_TEMP/launch.txt"
+          { echo '```'; tail -60 "$RUNNER_TEMP/launch.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Report
         if: always()
         run: |
