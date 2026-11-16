@@ -5,6 +5,8 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var sheet: Sheet?
+    /// Screen pictures only: start scrolled to the end.
+    var scrolledToEnd = false
 
     enum Sheet: Identifiable, Hashable {
         case add
@@ -24,17 +26,11 @@ struct RootView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
-                .padding(.bottom, 100)
+                .padding(.bottom, 16)
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("GupDo")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Everything", systemImage: "list.bullet") { sheet = .everything }
-                        .accessibilityIdentifier("everything")
-                }
-            }
-            .overlay(alignment: .bottom) {
+            .defaultScrollAnchor(scrolledToEnd ? .bottom : .top)
+            // the Add button sits below the scrolling content, so the last row scrolls clear of it
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 Button {
                     sheet = .add
                 } label: {
@@ -44,8 +40,17 @@ struct RootView: View {
                         .padding(.vertical, 16)
                 }
                 .buttonStyle(.glassProminent)
-                .padding(.bottom, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
                 .accessibilityIdentifier("add")
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("GupDo")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Everything", systemImage: "list.bullet") { sheet = .everything }
+                        .accessibilityIdentifier("everything")
+                }
             }
         }
         .sheet(item: $sheet) { s in
@@ -59,6 +64,10 @@ struct RootView: View {
         }
         .sheet(item: $model.screen) { screen in
             AnswerSheet(screen: screen)
+        }
+        .onChange(of: model.screen) { _, screen in
+            // an answer screen from a notification or alarm replaces an open form or list (one sheet at a time)
+            if screen != nil { sheet = nil }
         }
     }
 

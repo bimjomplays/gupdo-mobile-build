@@ -49,6 +49,11 @@ final class ScreenTests: XCTestCase {
         shot("1-main-ringing-reminder", m, RootView())
     }
 
+    func testMainScreenScrolledToEnd() {
+        // the last Upcoming row scrolls clear of the Add button
+        shot("1b-main-scrolled-to-end", AppModel(preview: dayData(), now: now, calendar: cal), RootView(scrolledToEnd: true))
+    }
+
     func testMainScreenNext() {
         let m = AppModel(preview: dayData(ringing: false), now: now, calendar: cal)
         XCTAssertEqual(m.nowCard?.ringing, false)
