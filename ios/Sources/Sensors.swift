@@ -21,6 +21,8 @@ protocol PhoneSensors: AnyObject {
     func followDriving(_ on: Bool, onUpdate: @escaping @MainActor (Date?) -> Void)
     /// Asks for location (While Using, then Always for arrivals in the background) and motion permission.
     func requestPermissions()
+    /// Arrivals can be seen in the background (Always location permission).
+    var canWatchPlaces: Bool { get }
 }
 
 @MainActor
@@ -29,7 +31,8 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
 
     private let manager = CLLocationManager()
     private let motion = CMMotionActivityManager()
-    private var monitor: CLMonitor?
+    /// Made once (two monitors with the same name must not exist; replans can overlap while it's being made).
+    private var monitorTask: Task<CLMonitor, Never>?
     private var eventsTask: Task<Void, Never>?
     private var onRegion: (@MainActor (UUID, Bool, Date) -> Void)?
     private var drivingTask: Task<Void, Never>?
@@ -76,10 +79,11 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
     func watch(_ places: [Place], onRegion: @escaping @MainActor (UUID, Bool, Date) -> Void) async {
         self.onRegion = onRegion
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { return }
-        if monitor == nil {
-            let m = await CLMonitor(Self.monitorName)
-            monitor = m
+        if monitorTask == nil {
+            monitorTask = Task { @MainActor in await CLMonitor(Self.monitorName) }
+            let made = monitorTask!
             eventsTask = Task { @MainActor [weak self] in
+                let m = await made.value
                 do {
                     for try await event in await m.events {
                         guard let self, let id = Self.placeID(event.identifier) else { continue }
@@ -92,7 +96,7 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
                 } catch {}
             }
         }
-        guard let monitor else { return }
+        guard let monitor = await monitorTask?.value else { return }
         // At most 20 conditions per app: the first 20 places (Home first).
         let wanted = places.sorted { ($0.isHome ? 0 : 1, $0.name) < ($1.isHome ? 0 : 1, $1.name) }.prefix(20)
         let ids = Set(wanted.map(Self.identifier))
@@ -108,25 +112,33 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
     // MARK: Location
 
     func currentFix(timeout: TimeInterval) async -> LocationFix? {
-        let deadline = Date().addingTimeInterval(timeout)
-        let updates = Task<LocationFix?, Never> { @MainActor in
-            var best: LocationFix?
-            do {
-                for try await update in CLLocationUpdate.liveUpdates() {
-                    if update.authorizationDenied || update.authorizationDeniedGlobally { break }
-                    guard let loc = update.location else { continue }
-                    let fix = Self.fix(loc)
-                    if best == nil || fix.accuracy < best!.accuracy { best = fix }
-                    if fix.accuracy <= 20 || Date() >= deadline || Task.isCancelled { break }
-                }
-            } catch {}
-            return best
+        // The sharpest fix within `timeout`: whichever comes first, a sharp fix or the deadline, answers.
+        let race = FixRace()
+        let fix: LocationFix? = await withCheckedContinuation { cont in
+            race.continuation = cont
+            let updates = Task { @MainActor in
+                do {
+                    for try await update in CLLocationUpdate.liveUpdates() {
+                        if update.authorizationDenied || update.authorizationDeniedGlobally || Task.isCancelled { break }
+                        guard let loc = update.location else { continue }
+                        race.offer(Self.fix(loc))
+                        if (race.best?.accuracy ?? .infinity) <= 20 { break }
+                    }
+                } catch {}
+                race.answer()
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(timeout))
+                updates.cancel()
+                race.answer()
+            }
         }
-        let timer = Task { try? await Task.sleep(for: .seconds(timeout)); updates.cancel() }
-        let best = await updates.value
-        timer.cancel()
-        if let best { lastFix = best }
-        return best
+        if let fix { lastFix = fix }
+        return fix
+    }
+
+    var canWatchPlaces: Bool {
+        CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) && manager.authorizationStatus == .authorizedAlways
     }
 
     static func fix(_ loc: CLLocation) -> LocationFix {
@@ -178,5 +190,21 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
                 }
             } catch {}
         }
+    }
+}
+
+/// The best fix so far, answered once (by a sharp fix or the deadline, whichever is first).
+@MainActor
+private final class FixRace {
+    var best: LocationFix?
+    var continuation: CheckedContinuation<LocationFix?, Never>?
+
+    func offer(_ fix: LocationFix) {
+        if best == nil || fix.accuracy < best!.accuracy { best = fix }
+    }
+
+    func answer() {
+        continuation?.resume(returning: best)
+        continuation = nil
     }
 }

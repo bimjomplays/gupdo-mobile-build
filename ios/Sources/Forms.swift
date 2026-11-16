@@ -664,7 +664,7 @@ struct EverythingView: View {
                         }
                     }
                 }
-                Section("Places") {
+                Section {
                     let inside = Presence.inside(model.data)
                     ForEach(model.data.places.sorted { ($0.isHome ? 0 : 1, $0.name) < ($1.isHome ? 0 : 1, $1.name) }) { p in
                         NavigationLink { PlaceEditor(original: p) } label: {
@@ -674,6 +674,13 @@ struct EverythingView: View {
                     }
                     NavigationLink { PlaceEditor(original: nil) } label: {
                         Label(model.data.home == nil ? "Add Home" : "Add a place", systemImage: "plus")
+                    }
+                } header: {
+                    Text("Places")
+                } footer: {
+                    if !model.data.places.isEmpty, model.sensors?.canWatchPlaces == false {
+                        Text("Location is not set to Always, so GupDo can't see you arrive and place habits stay quiet. Settings › GupDo › Location › Always.")
+                            .foregroundStyle(.orange)
                     }
                 }
             }
