@@ -7,7 +7,9 @@
 #   ci/launch-check.sh UDID APP_PATH BUNDLE_ID SAMPLE_JSON OUT
 set -uo pipefail
 udid=$1 app=$2 bundle=$3 sample=$4 out=$5
-watch=${WATCH:-20}
+# 40 s: with places and an event, the first replan may wait up to ~25 s for a location fix and MapKit's drive time
+# before it opens region monitoring
+watch=${WATCH:-40}
 mkdir -p "$out"
 reports="$HOME/Library/Logs/DiagnosticReports"
 proc=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
@@ -61,11 +63,13 @@ run() {  # run NAME: launch, watch, report
   xcrun simctl spawn "$udid" log show --start "$start" --style compact \
     --predicate "process == \"$proc\" AND (messageType == error OR messageType == fault OR eventMessage CONTAINS[c] \"assert\" OR eventMessage CONTAINS[c] \"exception\")" \
     > "$out/$name-log.txt" 2>&1 || true
-  local ips=""
-  for i in $(seq 1 $([ "$alive" = 1 ] && echo 2 || echo 15)); do  # the crash reporter takes a few seconds
-    sleep 1
-    ips=$(find "$reports" -maxdepth 1 -name "$proc*.ips" -newer "$out/.mark-$name" 2>/dev/null | head -1)
+  # this run's crash report (by the pid simctl printed); the crash reporter can take most of a minute
+  local ips="" launched
+  launched=$(sed -n "s/^$bundle: \([0-9][0-9]*\).*/\1/p" "$log" | head -1)
+  for i in $(seq 1 $([ "$alive" = 1 ] && echo 2 || echo 60)); do
+    ips=$(grep -l "\"pid\" *: *${launched:-none}," "$reports/$proc"*.ips 2>/dev/null | head -1)
     [ -n "$ips" ] && break
+    sleep 1
   done
   if [ "$alive" = 1 ] && [ -z "$ips" ]; then
     echo "$name: still running after ${watch}s (pid $pid)"

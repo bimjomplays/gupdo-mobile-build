@@ -44,7 +44,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         center.delegate = self
         center.setNotificationCategories(NotificationFactory.categories())
         guard !Self.underTest else { return true }
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.wakeID, using: nil) { task in
+        // on the main queue: the handler's work is the main actor's anyway
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.wakeID, using: .main) { task in
             let work = Task { @MainActor in
                 await AppModel.shared.refresh()
                 Self.scheduleWake()

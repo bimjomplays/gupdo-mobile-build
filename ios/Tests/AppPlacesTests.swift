@@ -68,6 +68,14 @@ final class AppPlacesTests: XCTestCase {
         XCTAssertEqual(m.data.places.count, 1)
     }
 
+    /// CoreLocation asserts on a CLMonitor name with anything but letters and digits ("Monitor name is not valid"):
+    /// build 16 died at launch with "gupdo-places".
+    func testTheMonitorNameIsLettersAndDigitsOnly() {
+        XCTAssertFalse(Sensors.monitorName.isEmpty)
+        XCTAssertTrue(Sensors.monitorName.unicodeScalars.allSatisfy { $0.isASCII && CharacterSet.alphanumerics.contains($0) },
+                      Sensors.monitorName)
+    }
+
     func testRegionMonitoringWatchesAtMost19NeededFirst() async {
         var d = GupDoData()
         d.places = (0..<22).map { Place(name: String(format: "Place %02d", $0), latitude: 40, longitude: -75 + Double($0) / 100) }
