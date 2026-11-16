@@ -68,7 +68,7 @@ enum PhotoFixtures {
 /// Proof in the app: region events, location proof, NFC tag proof, photo proof with Vision on the simulator, and the
 /// tuning of the photo threshold on the fixture set.
 @MainActor
-final class ProofTests: XCTestCase {
+final class AppProofTests: XCTestCase {
     let cal = Calendar.current
     lazy var day = DayKey(cal.date(from: DateComponents(year: 2026, month: 11, day: 16))!, cal)
     func at(_ h: Int, _ m: Int = 0) -> Date { day.at(TimeOfDay(h, m), cal) }
