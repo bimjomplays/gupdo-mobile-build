@@ -238,7 +238,7 @@ final class AppProofTests: XCTestCase {
 
     /// Vision's image feature prints work here (a real device or the Mac; not the iOS Simulator).
     static func visionWorks() async -> Bool {
-        (try? await PhotoMatcher.featurePrint(PhotoFixtures.image("desk-ref"))) != nil
+        ((try? await PhotoMatcher.distance(PhotoFixtures.image("desk-ref"), PhotoFixtures.image("other-1"))) ?? 0) > 0
     }
 }
 

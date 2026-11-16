@@ -331,9 +331,11 @@ struct ProofView: View {
         switch result {
         case .proved:
             messages[h.id] = nil
-        case .photoNoMatch(let close, _):
-            messages[h.id] = close ? "Almost. Line it up with the see-through reference photo and try again."
-                : "That doesn't look like the spot. Take it where the reference photo was taken."
+        case .photoNoMatch(let close, let distance):
+            // the distance helps tune PhotoMatch.threshold from real photos
+            let score = String(format: " (%.2f, needs %.2f)", distance, PhotoMatch.threshold)
+            messages[h.id] = (close ? "Almost. Line it up with the see-through reference photo and try again."
+                : "That doesn't look like the spot. Take it where the reference photo was taken.") + score
         case .notThere(let text):
             messages[h.id] = text
         case .wrongTag:

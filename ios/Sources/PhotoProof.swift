@@ -51,7 +51,7 @@ struct PhotoStore {
 
 /// On-device scene comparison with Vision's image feature prints.
 enum PhotoMatcher {
-    enum Failure: Error { case noImage, emptyFeaturePrint }
+    enum Failure: Error { case noImage, emptyFeaturePrint, blind }
 
     /// Throws rather than return an empty feature print (the iOS Simulator gives all zeros, which would make every
     /// photo "match"): a matcher that can't see never proves anything.
@@ -66,7 +66,10 @@ enum PhotoMatcher {
     static func distance(_ a: UIImage, _ b: UIImage) async throws -> Double {
         let fa = try await featurePrint(a)
         let fb = try await featurePrint(b)
-        return try fa.distance(to: fb)
+        let d = try fa.distance(to: fb)
+        // two camera photos are never exactly alike: 0 means every image gets the same print (the iOS Simulator)
+        guard d > 0 else { throw Failure.blind }
+        return d
     }
 }
 

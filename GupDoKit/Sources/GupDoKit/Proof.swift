@@ -9,12 +9,14 @@ import Foundation
 /// A live camera photo against the habit's reference photo of the spot. The app computes Vision image feature prints
 /// of both (on the phone, offline) and their distance: small = the same scene.
 enum PhotoMatch {
-    /// Feature-print distance at or below which a proof photo counts as the reference spot. Tuned on the CI's
-    /// simulator with the photo set in ios/Tests/Fixtures/PhotoMatch (same spots retaken from another angle, other
-    /// light, a step closer; random rooms), see PhotoMatchTests.
-    static let threshold: Double = 0.62
+    /// Feature-print distance at or below which a proof photo counts as the reference spot. Tuned with Vision on the
+    /// CI's Mac (ios/ci/photo-match) on the invented photo set in ios/Tests/Fixtures/PhotoMatch: retakes of the same
+    /// spot on another day (moved camera, other light, things moved, a step closer, tilted, darker) came out at
+    /// 0.02-0.17; other rooms at 0.29 (a look-alike bathroom with the same round mirror and plant) to 0.84, most
+    /// above 0.4. 0.25 leaves room for real retakes while still refusing the look-alike.
+    static let threshold: Double = 0.25
     /// Up to this distance a failed photo is "close": the screen suggests lining it up with the reference.
-    static let closeMargin: Double = 0.12
+    static let closeMargin: Double = 0.1
 
     enum Verdict: String, Codable, Hashable {
         case match
@@ -24,7 +26,8 @@ enum PhotoMatch {
     }
 
     static func verdict(distance: Double, threshold: Double = threshold) -> Verdict {
-        guard distance.isFinite, distance >= 0 else { return .noMatch }
+        // exactly 0 never comes from two camera photos: it means the matcher can't see (the iOS Simulator)
+        guard distance.isFinite, distance > 0 else { return .noMatch }
         if distance <= threshold { return .match }
         if distance <= threshold + closeMargin { return .close }
         return .noMatch

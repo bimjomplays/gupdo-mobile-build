@@ -14,13 +14,14 @@ final class ProofTests: XCTestCase {
     // MARK: Photo
 
     func testPhotoVerdict() {
-        XCTAssertEqual(PhotoMatch.verdict(distance: 0), .match)
+        XCTAssertEqual(PhotoMatch.verdict(distance: 0.01), .match)
+        XCTAssertEqual(PhotoMatch.verdict(distance: 0), .noMatch, "a blind matcher")
         XCTAssertEqual(PhotoMatch.verdict(distance: PhotoMatch.threshold), .match)
         XCTAssertEqual(PhotoMatch.verdict(distance: PhotoMatch.threshold + 0.01), .close)
         XCTAssertEqual(PhotoMatch.verdict(distance: PhotoMatch.threshold + PhotoMatch.closeMargin + 0.01), .noMatch)
         XCTAssertEqual(PhotoMatch.verdict(distance: .nan), .noMatch)
         XCTAssertEqual(PhotoMatch.verdict(distance: -1), .noMatch)
-        XCTAssertEqual(PhotoMatch.verdict(distance: 0.3, threshold: 0.2), .close)
+        XCTAssertEqual(PhotoMatch.verdict(distance: 0.25, threshold: 0.2), .close)
     }
 
     func testPhotoProofNeedsMatchAndLiveCamera() {
