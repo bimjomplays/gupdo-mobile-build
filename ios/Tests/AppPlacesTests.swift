@@ -24,7 +24,7 @@ final class AppPlacesTests: XCTestCase {
     let store = Place(name: "Store (example)", latitude: 40.01, longitude: -75.01, radius: 150)
     let dentist = EventLocation(name: "Dentist (example)", address: "1 Example St", latitude: 40.1, longitude: -75.2)
 
-    func model(_ d: GupDoData, now: Date, sensors: FakeSensors? = FakeSensors(), drive: FakeDrive? = nil,
+    func model(_ d: GupDoData, now: Date, sensors: FakeSensors? = nil, drive: FakeDrive? = nil,
                fake: FakeScheduler) -> AppModel {
         AppModel(store: .memory(d), scheduler: fake, clock: .fixed(now), calendar: cal, sensors: sensors, drive: drive)
     }
