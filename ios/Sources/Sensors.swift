@@ -155,14 +155,6 @@ final class Sensors: NSObject, PhoneSensors, CLLocationManagerDelegate {
         return best
     }
 
-    func recentFix(maxAge: TimeInterval) -> LocationFix? {
-        // the app's own last fix, or the last one the system has (region monitoring and other apps keep it fresh)
-        let system = manager.location.map(Self.fix)
-        let best = [lastFix, system].compactMap { $0 }.max { $0.time < $1.time }
-        guard let best, Date().timeIntervalSince(best.time) <= maxAge else { return nil }
-        return best
-    }
-
     var canWatchPlaces: Bool {
         CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) && manager.authorizationStatus == .authorizedAlways
     }
