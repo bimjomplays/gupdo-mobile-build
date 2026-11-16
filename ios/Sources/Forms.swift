@@ -559,6 +559,8 @@ struct EventEditor: View {
     /// The drive time from here to the Where, asked when it is picked (nil: unknown or not asked yet).
     @State private var drive: (place: EventLocation, minutes: Int?)?
     @State private var askingDrive = false
+    /// The start the end last moved with (set on load, so loading an event doesn't move its end).
+    @State private var lastStart: Date?
 
     var body: some View {
         Form {
@@ -642,9 +644,10 @@ struct EventEditor: View {
             }
         }
         .onAppear(perform: load)
-        .onChange(of: event.start) { old, new in
-            // the end moves with the start
-            if hasEnd { end = end.addingTimeInterval(new.timeIntervalSince(old)) }
+        .onChange(of: event.start) { _, new in
+            // the end moves with the start (not when the event is loaded)
+            if hasEnd, let last = lastStart { end = end.addingTimeInterval(new.timeIntervalSince(last)) }
+            lastStart = new
         }
         .onChange(of: event.location) { _, place in
             if place == nil, alert == .leave { alert = .standard }
@@ -712,6 +715,7 @@ struct EventEditor: View {
         event = original ?? Defaults.event(now: model.now, calendar: model.calendar)
         hasEnd = event.end != nil
         end = event.end ?? event.start.addingTimeInterval(3600)
+        lastStart = event.start
         switch event.headsUps {
         case .big: preset = .big
         case .normal: preset = .normal
@@ -781,7 +785,7 @@ struct WherePicker: View {
                         choice(current.name, detail: current.address, on: true) {}
                     }
                     ForEach(model.data.places.sorted { ($0.isHome ? 0 : 1, $0.name) < ($1.isHome ? 0 : 1, $1.name) }) { p in
-                        choice(p.name, detail: p.isHome ? "Home" : nil, on: selection?.placeID == p.id) {
+                        choice(p.name, detail: p.isHome && p.name != "Home" ? "Home" : nil, on: selection?.placeID == p.id) {
                             selection = EventLocation(place: p)
                         }
                     }
