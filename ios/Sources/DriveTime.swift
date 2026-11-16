@@ -43,7 +43,9 @@ final class MapDriveTimes: DriveTimes {
     /// Where the drive starts: a recent fix (the app's own or the system's last), else a fresh one, else whatever
     /// MapKit knows as the current location.
     private func source() async -> MKMapItem {
-        if let fix = sensors?.recentFix(maxAge: 10 * 60) ?? (await sensors?.currentFix(timeout: 8)) {
+        var fix = sensors?.recentFix(maxAge: 10 * 60)
+        if fix == nil { fix = await sensors?.currentFix(timeout: 8) }
+        if let fix {
             return MKMapItem(location: CLLocation(latitude: fix.latitude, longitude: fix.longitude), address: nil)
         }
         return MKMapItem.forCurrentLocation()
