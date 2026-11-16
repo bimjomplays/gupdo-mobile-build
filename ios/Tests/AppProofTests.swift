@@ -168,6 +168,14 @@ final class AppProofTests: XCTestCase {
         XCTAssertTrue(photos.save(PhotoFixtures.image("sink-ref"), as: h.referencePhoto!))
         d.habits = [h]
         let m = model(d, now: at(7, 30), sensors: FakeSensors(), photos: photos)
+        guard await Self.visionWorks() else {
+            // the simulator: Vision can't see, so nothing is proved (the threshold is checked on the Mac in CI)
+            guard case .failed = await m.provePhoto(h.id, photo: PhotoFixtures.image("sink-again-a")) else {
+                return XCTFail("a photo was proved without a working matcher")
+            }
+            XCTAssertFalse(Answers.isProved(h, data: m.data, now: at(7, 30), calendar: cal))
+            return
+        }
         let other = await m.provePhoto(h.id, photo: PhotoFixtures.image("other-6"))
         guard case .photoNoMatch = other else { return XCTFail("a look-alike bathroom passed: \(other)") }
         XCTAssertFalse(Answers.isProved(h, data: m.data, now: at(7, 30), calendar: cal))
@@ -178,6 +186,9 @@ final class AppProofTests: XCTestCase {
     /// Tunes `PhotoMatch.threshold`: every retake of a spot (and the same photo a step closer, tilted, darker) must
     /// pass against its reference; every other spot and room must fail. Writes the distances to photo-match.txt.
     func testPhotoThresholdSeparatesSameSpotFromOtherRooms() async throws {
+        guard await Self.visionWorks() else {
+            throw XCTSkip("Vision image feature prints are empty in the simulator; the workflow's Photo match step checks the threshold on the Mac")
+        }
         var prints: [String: FeaturePrintObservationBox] = [:]
         func fp(_ name: String, _ image: UIImage) async throws -> FeaturePrintObservationBox {
             if let p = prints[name] { return p }
@@ -224,6 +235,11 @@ final class AppProofTests: XCTestCase {
     }
 
     private func fmt(_ v: Double) -> String { String(format: "%.3f", v) }
+
+    /// Vision's image feature prints work here (a real device or the Mac; not the iOS Simulator).
+    static func visionWorks() async -> Bool {
+        (try? await PhotoMatcher.featurePrint(PhotoFixtures.image("desk-ref"))) != nil
+    }
 }
 
 /// FeaturePrintObservation in a reference box (for a dictionary cache).

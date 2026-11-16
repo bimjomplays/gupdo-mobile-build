@@ -51,11 +51,15 @@ struct PhotoStore {
 
 /// On-device scene comparison with Vision's image feature prints.
 enum PhotoMatcher {
-    enum Failure: Error { case noImage }
+    enum Failure: Error { case noImage, emptyFeaturePrint }
 
+    /// Throws rather than return an empty feature print (the iOS Simulator gives all zeros, which would make every
+    /// photo "match"): a matcher that can't see never proves anything.
     static func featurePrint(_ image: UIImage) async throws -> FeaturePrintObservation {
         guard let cg = PhotoStore.prepared(image).cgImage else { throw Failure.noImage }
-        return try await GenerateImageFeaturePrintRequest().perform(on: cg, orientation: .up)
+        let print = try await GenerateImageFeaturePrintRequest().perform(on: cg, orientation: .up)
+        guard print.data.contains(where: { $0 != 0 }) else { throw Failure.emptyFeaturePrint }
+        return print
     }
 
     /// Feature-print distance between two photos: small = the same scene (see `PhotoMatch.threshold`).

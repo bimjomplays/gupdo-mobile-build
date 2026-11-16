@@ -192,6 +192,17 @@ jobs:
                   if len(reps) > 1:
                       print(f"  retried: {name(p, n)} ({', '.join(c.get('result', '?') for c in reps)})")
           EOF
+      - name: Photo match (Vision on the Mac)
+        # the simulator's Vision returns empty image feature prints, so PhotoMatch.threshold is checked here, on the
+        # Mac, with the invented photo set in Tests/Fixtures/PhotoMatch (see ci/photo-match/main.swift)
+        if: always()
+        run: |
+          set -o pipefail
+          mkdir -p "$GITHUB_WORKSPACE/shots"
+          swiftc -swift-version 5 -O ../GupDoKit/Sources/GupDoKit/*.swift ci/photo-match/main.swift \
+            -o "$RUNNER_TEMP/photo-match"
+          "$RUNNER_TEMP/photo-match" Tests/Fixtures/PhotoMatch "$GITHUB_WORKSPACE/shots/photo-match.txt" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Collect screenshots
         if: always()
         run: |
